@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -15,6 +16,9 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 
 public class MainActivity extends AppCompatActivity {
     private TextView tStatus;
@@ -30,6 +34,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        //currentMonth = new SimpleDateFormat("MMM").format(Calendar.getInstance().getTime());
 
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         databaseReference = database.getReference();
@@ -55,8 +61,8 @@ public class MainActivity extends AppCompatActivity {
         switch(view.getId()){
             case R.id.bSearch:
                 if(!eSearch.getText().toString().isEmpty()){
-                    currentMonth = prefUser.getString("KEY1","");
-
+                    String monthCurrent = prefUser.getString("KEY1",currentMonth);
+                    currentMonth = eSearch.getText().toString();
                     tStatus.setText("Searching...");
                     createNewDBListener();
                 }else{
@@ -67,30 +73,37 @@ public class MainActivity extends AppCompatActivity {
                 if(!eIncome.getText().toString().isEmpty() && !eExpenses.getText().toString().isEmpty()){
                     String expenses = eExpenses.getText().toString();
                     String income = eIncome.getText().toString();
-                    databaseReference.child("Calendar").child(currentMonth).child("expenses").setValue(expenses);
-                    databaseReference.child("Calendar").child(currentMonth).child("income").setValue(income);
+                    databaseReference.child("calendar").child(currentMonth).child("expenses").setValue(expenses);
+                    databaseReference.child("calendar").child(currentMonth).child("income").setValue(income);
                 }
                 break;
         }
     }
 
     private void createNewDBListener() {
-        // remove previous databaseListener
-        if (databaseReference != null && currentMonth != null && databaseListener != null)
-            databaseReference.child("calendar").child(currentMonth).removeEventListener(databaseListener);
 
         databaseListener = new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                // This method is called once with the initial value and again
-                // whenever data at this location is updated.
-                MonthlyExpenses monthlyExpense = dataSnapshot.getValue(MonthlyExpenses.class);
-                // explicit mapping of month name from entry key
-                monthlyExpense.month = dataSnapshot.getKey();
+                if(dataSnapshot.hasChild(currentMonth)){
+                    String month, income, expenses;
+                    month = dataSnapshot.getKey();
+                    income = dataSnapshot.child(currentMonth).child("income").getValue().toString();
+                    expenses = dataSnapshot.child(currentMonth).child("expenses").getValue().toString();
 
-                eIncome.setText(String.valueOf(monthlyExpense.getIncome()));
-                eExpenses.setText(String.valueOf(monthlyExpense.getExpenses()));
-                tStatus.setText("Found entry for " + currentMonth);
+                    Float Fincome, Fexpenses;
+                    Fincome = Float.parseFloat(income);
+                    Fexpenses = Float.parseFloat(expenses);
+
+                    MonthlyExpenses monthlyExpense = new MonthlyExpenses(month, Fincome, Fexpenses);
+
+                    eIncome.setText(String.valueOf(monthlyExpense.getIncome()));
+                    eExpenses.setText(String.valueOf(monthlyExpense.getExpenses()));
+                    tStatus.setText("Found entry for " + currentMonth);
+                }else{
+                    tStatus.setText("No entries found");
+                }
+
             }
 
             @Override
@@ -98,8 +111,7 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        // set new databaseListener
-        databaseReference.child("calendar").child(currentMonth).addValueEventListener(databaseListener);
+        databaseReference.child("calendar").addValueEventListener(databaseListener);
     }
 
 }
