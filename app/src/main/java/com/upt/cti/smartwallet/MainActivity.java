@@ -19,12 +19,14 @@ import com.google.firebase.database.ValueEventListener;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
     private TextView tStatus;
     private EditText eSearch, eIncome, eExpenses;
     private DatabaseReference databaseReference;
     private String currentMonth="";
+    private String searchMonth="";
     private ValueEventListener databaseListener;
 
     private final static String PREF_SETTINGS = "pref_settings";
@@ -35,12 +37,15 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //currentMonth = new SimpleDateFormat("MMM").format(Calendar.getInstance().getTime());
+        Calendar mCalendar = Calendar.getInstance();
+        currentMonth = mCalendar.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale.getDefault()).toLowerCase();
 
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         databaseReference = database.getReference();
         getViewObjects();
-        saveToSharedPreferences();
+
+        SharedPreferences sharedPreferences = getSharedPreferences(PREF_SETTINGS, MODE_PRIVATE);
+        eSearch.setText(sharedPreferences.getString("KEY1", ""));
     }
 
     public void getViewObjects(){
@@ -50,19 +55,20 @@ public class MainActivity extends AppCompatActivity {
         eExpenses = (EditText) findViewById(R.id.eExpenses);
     }
 
-    public void saveToSharedPreferences(){
+    public void saveToSharedPreferences(String month){
         prefUser = getSharedPreferences(PREF_SETTINGS, Context.MODE_PRIVATE);
 
         SharedPreferences.Editor editor = prefUser.edit();
-        editor.putString("KEY1",currentMonth);
+        editor.putString("KEY1",month);
+        editor.apply();
     }
 
     public void clicked(View view){
         switch(view.getId()){
             case R.id.bSearch:
                 if(!eSearch.getText().toString().isEmpty()){
-                    String monthCurrent = prefUser.getString("KEY1",currentMonth);
-                    currentMonth = eSearch.getText().toString();
+                    searchMonth = eSearch.getText().toString().toLowerCase();
+                    saveToSharedPreferences(searchMonth);
                     tStatus.setText("Searching...");
                     createNewDBListener();
                 }else{
@@ -75,21 +81,25 @@ public class MainActivity extends AppCompatActivity {
                     String income = eIncome.getText().toString();
                     databaseReference.child("calendar").child(currentMonth).child("expenses").setValue(expenses);
                     databaseReference.child("calendar").child(currentMonth).child("income").setValue(income);
+
+                    Toast.makeText(this, "Income and expenses updated for " + currentMonth, Toast.LENGTH_LONG).show();
                 }
                 break;
         }
     }
 
     private void createNewDBListener() {
+        if (databaseReference != null && currentMonth != null && databaseListener != null)
+            databaseReference.child("calendar").child(currentMonth).removeEventListener(databaseListener);
 
         databaseListener = new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                if(dataSnapshot.hasChild(currentMonth)){
+                if(dataSnapshot.hasChild(searchMonth)){
                     String month, income, expenses;
                     month = dataSnapshot.getKey();
-                    income = dataSnapshot.child(currentMonth).child("income").getValue().toString();
-                    expenses = dataSnapshot.child(currentMonth).child("expenses").getValue().toString();
+                    income = dataSnapshot.child(searchMonth).child("income").getValue().toString();
+                    expenses = dataSnapshot.child(searchMonth).child("expenses").getValue().toString();
 
                     Float Fincome, Fexpenses;
                     Fincome = Float.parseFloat(income);
@@ -99,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
 
                     eIncome.setText(String.valueOf(monthlyExpense.getIncome()));
                     eExpenses.setText(String.valueOf(monthlyExpense.getExpenses()));
-                    tStatus.setText("Found entry for " + currentMonth);
+                    tStatus.setText("Found entry for " + searchMonth);
                 }else{
                     tStatus.setText("No entries found");
                 }
